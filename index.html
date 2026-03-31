@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pro Emoji Racer - Button Controls</title>
+<style>
+  body { margin: 0; background: #111; overflow: hidden; font-family: sans-serif; touch-action: manipulation; }
+  #game-container { position: relative; width: 100vw; height: 100vh; background: #222; overflow: hidden; }
+  
+  /* سڑک کی لکیر */
+  .road-line { position: absolute; left: 50%; width: 4px; height: 100%; border-left: 4px dashed rgba(255,255,255,0.3); transform: translateX(-50%); }
+
+  #player { position: absolute; font-size: 45px; z-index: 10; transition: 0.05s linear; }
+  .enemy { position: absolute; font-size: 40px; z-index: 5; }
+  .coin { position: absolute; font-size: 30px; z-index: 8; }
+  .battery { position: absolute; font-size: 35px; z-index: 9; }
+
+  /* میٹر اور سکور */
+  #stats { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; color: white; font-size: 20px; font-weight: bold; z-index: 100; text-shadow: 2px 2px #000; }
+
+  /* کنٹرول بٹن */
+  #controls { position: absolute; bottom: 30px; left: 20px; display: grid; grid-template-columns: 60px 60px 60px; grid-template-rows: 60px 60px; gap: 10px; z-index: 200; }
+  .btn { width: 60px; height: 60px; background: rgba(255,255,255,0.3); color: white; border: 2px solid white; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .btn:active { background: rgba(255,255,255,0.6); }
+  .up { grid-column: 2; }
+  .left { grid-column: 1; grid-row: 2; }
+  .down { grid-column: 2; grid-row: 2; }
+  .right { grid-column: 3; grid-row: 2; }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <div class="road-line"></div>
+  <div id="stats">
+    <div>💰 Coins: <span id="coin-count">0</span></div>
+    <div>📏 <span id="meter-count">0</span>m</div>
+  </div>
+  
+  <div id="player">🏎️</div>
+
+  <div id="controls">
+    <div class="btn up" id="btn-up">🔼</div>
+    <div class="btn left" id="id-left">◀️</div>
+    <div class="btn down" id="btn-down">🔽</div>
+    <div class="btn right" id="btn-right">▶️</div>
+  </div>
+</div>
+
+<script>
+const player = document.getElementById('player');
+const container = document.getElementById('game-container');
+const coinDisplay = document.getElementById('coin-count');
+const meterDisplay = document.getElementById('meter-count');
+
+let coins = 0;
+let meters = 0;
+let gameSpeed = 5;
+let playerX = window.innerWidth / 2 - 25;
+let playerY = window.innerHeight - 150;
+let gameActive = true;
+let isBoosted = false;
+
+// پلیئر کی پوزیشن اپڈیٹ
+function updatePlayer() {
+  player.style.left = playerX + 'px';
+  player.style.top = playerY + 'px';
+}
+updatePlayer();
+
+// بٹن کنٹرولز کا لاجک
+const moveStep = 20;
+document.getElementById('btn-up').onclick = () => { if(playerY > 50) playerY -= moveStep; updatePlayer(); };
+document.getElementById('btn-down').onclick = () => { if(playerY < window.innerHeight - 120) playerY += moveStep; updatePlayer(); };
+document.getElementById('id-left').onclick = () => { if(playerX > 10) playerX -= moveStep; updatePlayer(); };
+document.getElementById('btn-right').onclick = () => { if(playerX < window.innerWidth - 60) playerX += moveStep; updatePlayer(); };
+
+// میٹر کاؤنٹر اور اسپیڈ بڑھانا
+setInterval(() => {
+  if (gameActive) {
+    meters++;
+    meterDisplay.innerText = meters;
+    
+    // ہر 50 میٹر پر اسپیڈ بڑھانا
+    if (meters % 50 === 0) {
+      gameSpeed += 1.5;
+      console.log("Speed increased! Current speed: " + gameSpeed);
+    }
+  }
+}, 200); // میٹر چلنے کی رفتار
+
+function spawn(type) {
+  if (!gameActive) return;
+  const obj = document.createElement('div');
+  obj.className = type;
+  
+  if (type === 'enemy') obj.innerText = ['🚔', '🚍', '🚚', '🚛'][Math.floor(Math.random()*4)];
+  if (type === 'coin') obj.innerText = '💰';
+  if (type === 'battery') obj.innerText = '🔋';
+
+  obj.style.left = Math.random() * (window.innerWidth - 50) + 'px';
+  obj.style.top = '-100px';
+  container.appendChild(obj);
+
+  let interval = setInterval(() => {
+    if (!gameActive) { clearInterval(interval); return; }
+    
+    let top = parseInt(obj.style.top);
+    obj.style.top = (top + gameSpeed) + 'px';
+
+    if (isColliding(player, obj)) {
+      if (type === 'enemy' && !isBoosted) {
+        gameActive = false;
+        alert("Game Over!\nDistance: " + meters + "m\nCoins: " + coins);
+        location.reload();
+      } else if (type === 'coin') {
+        coins++;
+        coinDisplay.innerText = coins;
+        obj.remove();
+        clearInterval(interval);
+      } else if (type === 'battery') {
+        activateBoost();
+        obj.remove();
+        clearInterval(interval);
+      } else if (type === 'enemy' && isBoosted) {
+        obj.remove(); // بوسٹ میں دشمن غائب
+        clearInterval(interval);
+      }
+    }
+
+    if (top > window.innerHeight) {
+      obj.remove();
+      clearInterval(interval);
+    }
+  }, 20);
+}
+
+function isColliding(a, b) {
+  let aR = a.getBoundingClientRect();
+  let bR = b.getBoundingClientRect();
+  return !(aR.top > bR.bottom || aR.bottom < bR.top || aR.right < bR.left || aR.left > bR.right);
+}
+
+function activateBoost() {
+  isBoosted = true;
+  player.style.filter = "drop-shadow(0 0 15px gold) brightness(1.5)";
+  setTimeout(() => {
+    isBoosted = false;
+    player.style.filter = "none";
+  }, 12000);
+}
+
+// آبجیکٹ پیدا کرنے کے ٹائمرز
+setInterval(() => spawn('enemy'), 1800);
+setInterval(() => spawn('coin'), 2500);
+setInterval(() => spawn('battery'), 20000);
+
+</script>
+</body>
+</html>
